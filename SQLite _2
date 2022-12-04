@@ -1,0 +1,239 @@
+--2.01 У какого композитора самый дорогой музыкальный трек? Самый дешевый трек?
+
+select Composer, max(UnitPrice)
+    from tracks
+        group by Composer
+        order by max(UnitPrice) desc limit 10 --выбор 10 результатов
+
+select Composer, min(UnitPrice) --или функция min
+    from tracks
+        group by Composer
+        order by min(UnitPrice) asc limit 10
+
+--2.02 В каких немецких города в 2009 было больше 1 продажи?
+
+select ShipCity
+    from sales
+        where ShipCountry='Germany' and SalesDate >= date('2009-01-01') and SalesDate < date('2010-01-01')
+        and ShipCity is not null --не забывать про нули
+        group by ShipCity
+        having count(*)>1 --фильтрация поверх группировки
+
+--2.03 INSERT
+
+select *
+    from media_types
+
+insert into media_types 
+values (128, 'AA3') --добавление новых строк
+
+insert into media_types 
+values (129, 'AA4'), (130, 'A3A'), (154, 'AA5')
+
+insert into media_types
+select *
+from genres
+where genreid=26
+
+--2.04 UPDATE
+
+select *
+    from media_types
+;
+update media_types set name = 'AAAA', MediatypeId=MediatypeId+1 --переименование всех значений в столбце
+where MediatypeId = 126
+
+--2.04 DELETE
+
+select *
+    from media_types
+
+delete 
+from media_types
+where MediaTypeId=27
+
+/* с функцией INSERT, UPDATE, DELETE необходимо быть максимально осторожным
+все изменения в базе данных необратимы.
+
+select strftime('%m', SalesDate), SalesDate
+from sales --выборка по месяцу, Y - по году
+
+/*Объединение таблиц, функция UNION
+UNION
+        ALL --полный
+        DISTINCT --исключающий
+Подзапросы
+        коррелированный
+        без корреляции
+JOIN
+        CROSS --декартовое произведение всех строк в одной таблице со всеми строками в другой (перемножение)
+        INNER --внутреннее соединение, но с указанием условия сопоставления
+        OUTER --внешнее соединение
+            LEFT
+            RIGHT --в SQLite нет
+            FULL --в SQLite нет
+EXCEPT --логическое вычитание, оставляются только те строки, которых нет в другой таблице
+INTERSECT --логическое пересечение, оставление тех строк, которые есть и в одной таблице, и в другой таблице
+
+select FirstName, LastName, 'Клиент' from customers
+union all  --получается объединенная таблица и всех клиентов, и всех сотрудников
+select FirstName, LastName, 'Сотрудник' from employees 
+
+select FirstName, LastName from customers
+union --объединение, отбрасывает дубликаты (как distinct)
+select FirstName, LastName from employees
+
+SELECT *
+  FROM (
+           SELECT FirstName,
+                  LastName
+             FROM customers
+           UNION
+           SELECT FirstName,
+                  LastName
+             FROM employees
+       )
+       AS t-- создание подзапроса, можем представить всё как таблицу
+ WHERE FirstName = 'Aaron'--все остальные запросы работают
+
+select FirstName from customers
+except
+select FirstName from employees --только те имена клиентов, которые не встречаются среди сотрудников
+
+select FirstName from customers
+intersect
+select FirstName from employees --только те имена клиентов, которые есть в таблице сотрудников
+
+select FirstName, LastName from customers
+intersect
+select FirstName, LastName from employees --уникальных сопоставлений нет
+
+--2.07 Подзапрос в поле SELECT
+
+--посчитать количество продаж для каждого клиента подзапросом
+--поля: фамилия, имя, количество продаж
+
+SELECT CustomerId,
+       FirstName,
+       LastName,
+       (
+           SELECT count( * ) 
+             FROM sales
+       )
+  FROM customers;
+--подзапрос без корреляции, показывает все продажи
+
+SELECT CustomerId,
+       FirstName,
+       LastName,
+       (
+           SELECT count( * ) 
+             FROM sales
+            WHERE sales.CustomerId = customers.CustomerId
+       ) as count_sales
+  FROM customers;
+--подзапрос с корреляцией, показывает продажи для каждого клиента
+
+--2.08 Два вложенных подзапроса
+
+--Сколько музыкальных треков купил каждый клиент? Фамилия и имя каждого клиента и количество купленных треков
+
+SELECT c.CustomerId,
+       c.FirstName,
+       c.LastName,
+       (
+           SELECT sum(Quantity) 
+             FROM sales_items AS si
+            WHERE si.salesid IN (
+                      SELECT s.salesid
+                        FROM sales AS s
+                       WHERE s.customerid = c.customerid  --1
+                  )
+       )
+       AS sales_count
+  FROM customers AS c;
+/*
+сервер берет клиента под номером CustomerId, переходит в таблицу Sales, передает значение под номером 1
+вытаскивает список множества номеров продаж для клиента под номером 1
+salesid передает в таблицу sales_items и считает количество продаж для клиента под номером 1, ищет это количество продаж для клиента 1
+берет клиента под номером 2, вытаскивает список salesid из таблицы sales и для множества si.salesid считает сумму sum(Quantity)
+/*
+
+--2.11 Сложная задача подзапросами
+--в какую страну было продано больше всего музыкальных треков в жанре Jazz?
+
+SELECT ShipCountry,
+       ifnull(sum( (
+                       SELECT sum(Quantity) 
+                         FROM sales_items AS si-- считаем общее количество
+                        WHERE si.salesid = s.salesid AND-- кол-во проданных музыкальных треков в каждой продаже 
+                              si.trackid IN (
+                                  SELECT trackid-- -связываем с таблицей жанров
+                                    FROM tracks AS t
+                                   WHERE t.genreid IN (
+                                             SELECT genreid
+                                               FROM genres
+                                              WHERE name = 'Jazz'
+                                         )
+                              )
+                   )
+              ), 0) AS sum_sales
+  FROM sales AS s
+ GROUP BY ShipCountry --группировка по стране
+ ORDER BY sum_sales DESC; --сортировка по сумме продаж от большего к меньшему
+
+--JOIN - не имеет ничего общего с подзапросами (не алгоритмы, а комбинаторика, сопоставление строк)
+
+select * from genres cross join tracks cross join albums --перемножение
+
+SELECT EmployeeId,
+       employees.LastName,
+       employees.FirstName,
+       City,
+       customers.LastName,
+       customers.FirstName
+  FROM employees
+       CROSS JOIN
+       customers
+ WHERE employees.city = customers.city; --запрос совпадений городов сотрудников и покупателей
+
+SELECT *
+  FROM customers
+       INNER JOIN
+       sales ON customers.CustomerId = sales.CustomerId; --при inner join необходимо указывать условие
+
+--2.15 Сколько покупок сделал каждый клиент в 2009 году? Укажите ФИО и количество
+
+SELECT FirstName,
+       LastName,
+       (
+           SELECT count( * ) 
+             FROM sales
+            WHERE strftime('%Y', SalesDate) = '2009' AND 
+                  sales.CustomerId = t.CustomerId
+       )
+       AS count_sales
+  FROM customers AS t
+ ORDER BY count_sales DESC;
+
+SELECT c.FirstName,
+       c.LastName,
+       count( * ) 
+  FROM customers AS c
+       INNER JOIN
+       sales AS s ON c.CustomerId = s.CustomerId
+ WHERE strftime('%Y', SalesDate) = '2009'
+ GROUP BY c.FirstName,
+          c.LastName
+ ORDER BY count( * ) DESC --нулевые значения (покупатели без покупок) не отражены, т.к. innerjoin не нашел соответствия
+
+SELECT c.FirstName,
+       c.LastName,
+       count(s.CustomerId) 
+  FROM customers AS c
+       LEFT JOIN
+       sales AS s ON c.CustomerId = s.CustomerId AND strftime('%Y', SalesDate) = '2009'
+ GROUP BY c.FirstName,
+          c.LastName
+ ORDER BY count(s.CustomerId) DESC --нулевые значения есть
+--лучше решать запросы джойнами и перепроверять себя через подзапросы
