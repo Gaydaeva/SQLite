@@ -1,1 +1,1 @@
-# Наработки по SQLite-Studio
+# Наработки по SQLite
