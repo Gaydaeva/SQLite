@@ -1,0 +1,154 @@
+--1.05 Отобрать все музыкальные треки с ценой меньше 1 рубля. Больше 1 рубля.
+
+select * from tracks
+where UnitPrice >1 --больше 1 рубля <-меньше 1 рубля
+
+--Можно выбрать несколько столбцов
+
+select Name , Unitprice
+from tracks
+where UnitPrice >1 and UnitPrice <3 or name = 'Torn' --в этом запросе можно писать любые условия
+
+--1.06 Как зовут работников-продавцов в компании? Фамилия и имя.
+
+select LastName, FirstName
+from employees
+
+--В запросе можно объединить колонки, для этого необходимо воспользоваться контагинации (объединения) 
+
+select LastName, FirstName, LastName || ' ' || FirstName as FIO
+from employees as e --можно представить любым словом через функцию as
+where e.City= 'Calgary' --отбор сотрудников, живующих в Калгари
+
+select Name, Unitprice*(1-0.2) as price_without_tax
+from tracks --В запросе можно вставлять любые формулы
+
+select FirstName ||'; '|| LastName as FIO, 
+Address||'; '||City||'; '||State||'; '||Country||'; '||PostalCode as full_address
+from customers --Объединения
+
+select FirstName ||'; '|| LastName as FIO, 
+Address||'; '||City||'; '||State||'; '||Country||'; '||PostalCode as full_address
+,State
+,ifnull(State, 'нет штата')
+from customers --Обработка нулевых значений (условия)
+
+select FirstName ||'; '|| LastName as FIO, 
+Address||'; '||City||'; '|| ifnull(State,'') ||'; '|| Country||'; '||PostalCode as full_address
+,State
+,ifnull(State, 'нет штата')
+from customers --Если в поле штат стоит ноль, то нужно показать полный адрес
+
+--1.09 Отобрать все песни, в названии который содержится слово night
+
+select * 
+from tracks
+where name like '%night%' --любое количество символов слева и справа
+
+select * 
+from tracks
+where name like 'A%' --название трека начинается с буквы А 
+
+select * 
+from tracks
+where name like '%B' --название трека заканчивается на букву B
+
+select * 
+from tracks
+where name not like '%B' --название трека НЕ заканчивается на букву B
+
+select * 
+from tracks
+where name ='Fast As a Shark' --отбор точного значения
+
+select * 
+from tracks
+where name ='Fast As a Shark' or UnitPrice>2 --оператор or=ИЛИ
+
+select * 
+from tracks
+where name ='Fast As a Shark' or UnitPrice>2 
+    or TrackId in (1,2,3,4) --оператор in=вхождение во множество
+
+select * 
+from tracks
+where name ='Fast As a Shark' or UnitPrice>0.5 
+    and TrackId in (1,2,3,4) --логическое and имеет больший приоритет, чем or, скобки могут изменить приоритет
+
+--1.11 Даты
+
+select *
+from sales
+where SalesDate >=date('2010-01-01') and SalesDate < date('2011-01-01') --все продажи, сделанные в 2010 году
+
+select SalesDate
+    ,date(salesDate, 'start of year')
+    ,date(salesDate, 'start of month')
+    ,date(salesDate, 'start of day')
+    ,strftime ('%Y', SalesDate) as yyyy --извлечение части даты (года) важен регистр!
+    ,strftime ('%m', SalesDate) as mm --извлечение части даты (месяца)
+    ,strftime ('%d', SalesDate) as dd --извлечение части даты (дня)
+from sales
+where SalesDate >=date('2010-01-01') and SalesDate < date('2011-01-01') --округление даты продаж до начала года, месяца, дня
+
+date(salesDate, 'start of year' =date('2010-01-01') --даст тот же результат, что и строка выше
+
+--Узнать возраст, в котором работника приняли на должность
+select *, strftime('%Y', HireDate) - strftime('%Y', BirthDate), HireDate-BirthDate
+from employees
+
+select *
+    from sales
+    where date(salesDate, 'start of year')='2010-01-01'
+    and (ShipCity='London'
+        or ShipCity = 'New York') --продажи, сделанные в 2010 году и отгружены из Лондона или Нью-Йорка
+
+select *
+    from sales
+    where date(salesDate, 'start of year')='2010-01-01'
+    and (ShipCity='London'
+        or ShipCity = 'New York')
+        order by SalesDate --сортировка по дате продажи (от старого к новому)
+
+select *
+    from sales
+    where date(salesDate, 'start of year')='2010-01-01'
+    and (ShipCity='London'
+        or ShipCity = 'New York')
+        order by SalesDate desc --сортировка от нового к старому (обратный порядок), asc - прямой порядок (по умолчанию)
+
+select *
+    from sales
+    where date(salesDate, 'start of year')='2010-01-01'
+    and (ShipCity='London'
+        or ShipCity = 'New York')
+        order by ShipCity asc --сортировка в алфавитном порядке по городу
+
+select distinct ShipCity --distinct - функция отбрасывания дубликатов (повторяющихся значений)
+    from sales
+    where date(salesDate, 'start of year')='2010-01-01'
+    and (ShipCity='London'
+        or ShipCity = 'New York')
+        order by SalesDate
+
+--1.20 GROUP BY (группировка) - делает новую таблицу
+
+select distinct Country
+    from customers
+
+select Country, count(*) --count (агрегатная функция), считает количество строк для каждой группы
+    from customers
+        group by Country
+
+select Country, count(*), max(age), min(age), avg(age), sum(age) --максимальный, минимальный, средний, сумма возраста клиента в данной группе
+    from customers
+        group by Country
+
+select Country, City, count(*), max(age), min(age), avg(age), sum(age) --выдает количество клиентов в конкретной стране и городе
+    from customers
+        group by Country, City --группировка по стране и городу
+        order by count(*) desc --показывает страну и город, где проживает максимальное количество клиентов
+
+select date(salesDate, 'start of year'), count(*)
+    from sales
+        group by date(salesDate, 'start of year') --количество продаж в каждом году
