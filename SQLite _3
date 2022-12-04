@@ -1,0 +1,310 @@
+------------3.02 Сколько денег потратил каждый покупатель на музыкальный трек № 1 TrackId=1
+--Задать запрос 2-мя способами - джойнами и подзапросами
+
+SELECT CustomerId,-- рекомендуется вводить первичный ключ (CustomerId)
+       FirstName,
+       LastName,
+       round( ( --запрос округления (2 знака после запятой)
+           SELECT sum(si.UnitPrice * si.Quantity)-- умножаем цену на количество (сумма проданных товаров) 
+             FROM sales_items AS si
+            WHERE si.TrackId=1 AND si.SalesId IN ( --между операцией и фильтрацией должно стоять логическое AND
+                      SELECT SalesId
+                        FROM sales AS s
+                       WHERE s.CustomerId = c.CustomerId
+                  )
+       ), 2) as sales_sum
+  FROM customers AS c  --рекомендуется именовать таблицы (алиасы), чтобы не путаться
+  ORDER BY sales_sum desc
+
+SELECT c.CustomerId, c.FirstName, c.LastName, sum(si.UnitPrice * si.Quantity) as sales_sum
+  FROM customers AS c
+       LEFT JOIN
+       sales AS s ON s.CustomerId = c.CustomerId
+       LEFT JOIN
+       sales_items AS si ON s.SalesId = si.SalesId
+       AND si.TrackId=1 --AND необходимо применить, чтобы показались строки с нулевыми значениями
+group by c.CustomerId, c.FirstName, c.LastName --когда делается группировка, те же значения выбираем в select
+--рекомендуется применять CustomerId, т.к. клиенты с одинаковой фамилией или именем могут "схлопнуться" в одного
+order by sales_sum desc
+
+--------------------------------------3.03 CREATE TABLE--------------------------------------
+
+create table [if not exists] [schema_name].table_name ( --[if not exists] не обязателен, если мы попытаемся создать таблицу, 
+--которая уже существует, и мы не будем указывать эту опцию, то выдаст ошибку, если опции не будет, то и ошибки не будет
+--[schema_name] - название схемы
+--table_name - название таблицы
+        column_1 data_type primary key, --колонка, тип данных (текстовое, числовое), первичный ключ (как правило, указывается автоматически первая колонка)
+        column_2 data_type not null, --not null запрещает вставлять нулевые значения в таблицу
+        column_3 data_type default 0, --default 0 по умолчанию добавляется ноль
+        table_constraints --ограничения на вставку некоторых строк
+        ) [without rowid] --автоматическое создание уникального кода строки не ставится
+
+create table contacts (
+             contact_id INTEGER PRIMARY KEY, --числовой тип данных, первичный ключ
+             first_name TEXT NOT NULL, --текстовый тип данных, не нулевой
+             last_name TEXT NOT NULL, --текстовый тип данных, не нулевой
+             email TEXT NOT NULL UNIQUE, --текстовый тип данных, не нулевой, уникальный (запрет на вставку двух одинаковых строк)
+             phone TEXT NOT NULL UNIQUE --текстовый тип данных, не нулевой, уникальный
+             )
+
+select * from contacts
+
+/*                        Типы данных
+    INTEGER - это целые числа (положительные или отрицательные). Целое число может иметь переменный расмер, 
+например, 1, 2, 3, 4 или 8 байтов.
+    REAL/FLOAT - реальные значения - это действительные числа с десятичными значениями, которые используют
+8-байтовые числа с плавающей запятой.
+    DECIMAL (16,3) - число с фиксированной запятой, 16 - количество цифр, которое можно указывать в этом поле,
+3 - количество цифр, которые можно указывать после запятой.
+    NUMERIC (16,3) - то же самое, что и DECIMAL (16,3)
+    DATE - дата (день, месяц, год).
+    DATETIME - дата со временем (день, месяц, год, часы, минуты, секунды).
+    BOOLEAN - true/false, 1 или 0
+    BLOB - большой двоичный объект, который может хранить любые данные. Максимальный размер BLOB теоретически
+не ограничен.
+    TEXT - используется для хранения символьных данных. Максимальное количество символов не ограничено.
+    VARCHAR (70) - текст конкретной длины, занимает столько места, сколько выделено в размерности (указывается в скобках).
+    NVARCHAR (70) - текст конкретной длины, но в отличие от VARCHAR (70), занимает столько места, сколько реально.
+
+CREATE TABLE groups (
+        group_id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL
+        )
+/*при типе связи многие-ко-многим, когда, например, каждый клиент мог сделать несколько заказов,
+создается промежуточная таблица со связью один-ко-многимю
+
+CREATE TABLE contact_groups(
+        contact_id INTEGER,
+        group_id INTEGER,
+        PRIMARY KEY (contact_id, group_id), --первичный ключ, уникальность строки (из двух значений)
+        FOREIGN KEY (contact_id) --внешний ключ, ссылка на другую таблицу
+            REFERENCES contacts (contact_id) --contact_id ссылается на contact_id в таблице contacts
+                ON DELETE CASCADE --каскадное удаление, если удалится строка в родительской таблице, то и в связанной тоже
+                ON UPDATE NO ACTION, --запрет на обновление информации
+        FOREIGN KEY (group_id)
+            REFERENCES groups (group_id) --group_id ссылается на group_id в таблице groups
+                ON DELETE CASCADE
+                ON UPDATE SET NULL
+            )
+
+SET NULL -- обновление/удаление строк с родительской таблицы проставляет NULL в дочернем ключе
+SET DEFAULT --проставляет дефолтное значение у дочернего ключа при обновлении/удалении родительского ключа
+RESTRICT -- запрещает обновление/удаление родительского ключа
+NO ACTION -- запрещает обновление/удаление родительского ключа
+CASCADE -- обновление/удаление строк с родительской таблицы ведет к каскадному обновлению/удалению с дочерней таблицы
+
+--------------------------------------3.06 ALTER TABLE - позволяет вносить изменения в таблицу-----------------
+
+select * from contacts_old
+
+ALTER TABLE contacts ADD COLUMN new_column integer --добавление колонки (столбика)
+
+ALTER TABLE contacts_old alter COLUMN new_column nvarchar(50) --изменения параметров поля (в других СУБД)
+
+ALTER TABLE contacts rename to contacts_old --переименование таблицы
+
+--------------------------------------3.07 Проверки CONSTARINT--------------------------------------
+
+CREATE TABLE contacts (contact_id INTEGER PRIMARY KEY,
+             first_name TEXT NOT NULL,
+             last_name TEXT NOT NULL,
+             email TEXT,
+             phone TEXT NOT NULL
+                     CHECK (length(phone)>=10)) --проверка условия ограничения строк (телефонный номер должен быть больше 10 строк)
+                     
+CREATE TABLE products (
+             product_id INTEGER PRIMARY KEY,
+             product_name TEXT NOT NULL,
+             list_price DECIMAL(10, 2) NOT NULL,
+             discount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+                 CHECK (list_price >= discount AND --проверка трех условий, цена больше скидки
+                        discount >= 0 AND --скидка больше нуля
+                        list_price >= 0) --цена больше нуля
+                )
+
+--------------------------------------3.08 Индекс--------------------------------------
+--Индекс - это некая дополнительная структура данных, которая помогает повысить производительность запроса.
+--Фактически, это ссылка на номер строки, чтобы быстро выполнять запрос. Своего рода оглавление в книге.
+
+CREATE [UNIQUE] INDEX index_name
+                ON table_name(column_list)
+
+CREATE TABLE contacts ( --создание таблицы
+             first_name TEXT NOT NULL,
+             last_name TEXT NOT NULL,
+             email TEXT NOT NULL
+             );
+
+CREATE UNIQUE INDEX idx_contacts_email --поле email будет всегда уникальным, запрет на создание одинаковых email
+            ON contacts (email);
+
+select * from contacts
+
+INSERT INTO contacts (first_name, last_name, email) --создание строк
+VALUES ('John', 'Doe', 'john.doe@sqlitetutorial.net')
+
+INSERT INTO contacts (first_name, last_name, email)
+VALUES ('David', 'Brown', 'david.brown@sqlitetutorial.net'),
+       ('Lisa', 'Smith', 'lisa.smith@sqlitetutorial.net')
+
+------------------------------------------------------------------------
+EXPLAIN QUERY PLAN --оптимизация плана запроса, выдача в результат план, по которому будет выполнен запрос ниже.
+--SEARCH TABLE contacts USING INDEX idx_contacts_email (email=?) - поиск конкретно в контакте (с индексом)
+--SCAN TABLE contacts - поиск по всей таблице во всех столбцах и строках (без индекса), запрос будет гораздо медленнее
+SELECT first_name,
+       last_name,
+       email
+  FROM contacts
+  WHERE email = 'lisa.smith@sqlitetutorial.net' --условия фильтрации работают
+
+DROP INDEX idx_contacts_email --удаление индекса
+
+--------------------------------------3.09 Views - Представления--------------------------------------
+
+CREATE VIEW vw_jazz_tracks AS
+    SELECT *
+      FROM tracks t
+     WHERE t.genreId IN (
+               SELECT genreId
+                 FROM genres
+                WHERE name = 'Jazz'
+           );
+
+SELECT * FROM vw_jazz_tracks --весь запрос "зашили" в одну views
+
+CREATE VIEW vw_Tracks AS
+    SELECT t.TrackId,
+           t.name AS TrackName,
+           Title AS Album,
+           mt.Name AS media_type,
+           g.Name AS Genre,
+           t.Composer,
+           Milliseconds,
+           Bytes,
+           UnitPrice
+      FROM tracks AS t
+           INNER JOIN albums AS a 
+               ON a.AlbumId = t.AlbumId
+           INNER JOIN media_types AS mt 
+               ON t.MediaTypeId = mt.MediaTypeId
+           INNER JOIN genres as g
+               ON t.GenreId=g.GenreId
+
+select * from vw_Tracks
+
+drop view vw_Tracks
+
+--------------------------------------3.10 CTE - Общие табличные выражения--------------------------------------
+
+WITH --похоже на VIEWS, но VIEWS это отдельный объект, а WITH как табличное выражение существует только внутри запроса и не сохраняется
+    cte as (
+        select * from customers
+        where Country='Germany'
+        ),
+    cte1 as (
+        select cte.CustomerId, cte.FirstName, cte.LastName, count(*) as cnt_sales
+        from sales as s
+            inner join CTE
+                  on cte.CustomerId=s.CustomerId
+        group by cte.FirstName, cte.LastName
+        )
+        SELECT * FROM cte1 --упрощает запрос, мы видим пошагово, что происходит внутри запроса, позволяет оптимизировать
+             
+--------------------------------------3.11. Триггеры--------------------------------------
+--События, которые срабатывают в результате другого события
+
+CREATE TRIGGER [IF NOT EXISTS] trigger_name
+    [BEFORE|AFTER|INSTEAD OF] [INSERT|UPDATE|DELETE] --[когда] [операция]
+    ON table_name
+    [WHEN condition] --условие
+BEGIN
+    statements; --события
+END
+
+
+DROP TABLE contacts
+
+select * from contacts
+
+CREATE TABLE contacts (
+             id INTEGER PRIMARY KEY,
+             first_name TEXT NOT NULL,
+             last_name TEXT NOT NULL,
+             phone TEXT NOT NULL,
+             email TEXT NOT NULL
+             );
+             
+CREATE TRIGGER validate_email_before_insert_leads
+        BEFORE INSERT ON contacts --триггер будет срабатывать до вставки в таблицу
+    BEGIN
+        SELECT
+            CASE
+          WHEN NEW.email NOT LIKE '%_@__%.__%' THEN --если новые данные не соответствуют данной маске,
+            RAISE (ABORT, 'Invalid email address') --сервер стриггерится и не позволит этого сделать
+                END;
+    END;
+
+INSERT INTO contacts (first_name, last_name, email, phone)
+VALUES ('John', 'Doe', 'jjj', '4089009334'); --выдает ошибку: [21:01:13] Ошибка при выполнении SQL запроса к базе данных 'testDB': Invalid email address
+
+insert into contacts (first_name, last_name, email, phone)
+values ('John', 'Doe', 'john.doe@sqlitetutorial.net', '4089009334');
+
+CREATE TABLE contacts_logs (
+             id INTEGER PRIMARY KEY,
+             old_id int,
+             new_id int,
+             old_phone text,
+             new_phone text,
+             old_email text,
+             new_email text,
+             user_action text,
+             created_at text
+             ); --таблица логов 
+
+CREATE TRIGGER log_contact_after_update --создание триггера
+        AFTER UPDATE ON contacts --при изменениях в таблице контактов
+        WHEN old.phone <> new.phone --старый телефон не равен новому
+                OR old.email <> new.email --или старый email не равен новому
+        BEGIN
+            INSERT INTO contacts_logs (
+                        old_id,
+                        new_id,
+                        old_phone,
+                        new_phone,
+                        old_email,
+                        new_email,
+                        user_action,
+                        created_at
+                        )
+        VALUES
+                (
+                        old.id,
+                        new.id,
+                        old.phone,
+                        new.phone,
+                        old.email,
+                        new.email,
+                        'UPDATE',
+                        DATETIME ('NOW')
+                    );
+        END;
+
+select * from contacts_logs;
+
+UPDATE contacts
+SET 
+    last_name = 'Smith'
+WHERE
+    id = 1; --триггер не сработал, т.к. нет изменений номера телефона или email
+
+UPDATE contacts
+SET
+    phone = '4089998888',
+    email = 'john.smith@sqlitetutorial.net'
+WHERE
+    id = 1; --триггер сработал, выдал результат
+
+DROP TRIGGER [IF EXISTS] trigger_name -- удаление триггера
+
+DROP TRIGGER log_contact_after_update
