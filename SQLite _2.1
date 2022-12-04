@@ -1,0 +1,180 @@
+--1	Посчитайте общую сумму продаж в США в 1 квартале 2012 года? 
+--             Решить 2-мя  способами Джойнами и Подзапросами 
+
+SELECT sum(UnitPrice * Quantity) 
+  FROM sales s
+       INNER JOIN
+       sales_items si ON s.SalesId = si.SalesId
+ WHERE ShipCountry = 'USA' AND 
+       SalesDate >= date('2012-01-01') AND 
+       SalesDate < date('2012-04-01');
+                
+SELECT sum( (
+                SELECT sum(UnitPrice * Quantity) 
+                  FROM sales_items si
+                 WHERE s.SalesId = si.SalesId
+            )
+       ) AS summ
+  FROM sales s
+ WHERE ShipCountry = 'USA' AND 
+       SalesDate >= date('2012-01-01') AND 
+       SalesDate < date('2012-04-01');
+
+--2	Покажите имена клиентов, которых нет среди работников.
+--	Решить 3-мя способами: подзапросами, джойнами и логическим вычитанием.
+
+SELECT DISTINCT FirstName
+  FROM customers
+EXCEPT --логическое вычитание
+SELECT FirstName
+  FROM employees;
+
+SELECT DISTINCT c.FirstName
+  FROM customers c
+ WHERE c.FirstName NOT IN ( --не находится среди имен среди таблицы сотрудников
+           SELECT e.FirstName
+             FROM employees e
+       );
+
+SELECT DISTINCT c.FirstName
+  FROM customers c
+       LEFT JOIN
+       employees e ON c.FirstName = e.FirstName
+ WHERE e.FirstName IS NULL;
+
+--3	Теоретический вопрос
+	Вернет ли данный запрос  одинаковый результат?  Да или НЕТ. 
+	Если  ДА. Объяснить почему.
+	Если НЕТ. Объяснить почему. Какой  запрос вернет больше строк ?
+
+ 	select *
+ 	from T1 LEFT JOIN T2
+		ON T1.column1=T2.column1
+	 where   T1.column1=0
+ 	
+	 select *
+	 from T1 LEFT JOIN T2
+		ON T1.column1=T2.column1 and   T1.column1=0
+
+/*Ответ: второй. Потому что во втором запросе мы, по сути, делаем одну операцию.
+Второй запрос гарантированно вернет нам все строки с таблицы Т1, независимо ни от чего.
+Условие AND T1.column1 = 0 применяется к таблице Т2.
+Первый запрос выполняет две операции и накладывает условие сверху джойна, отбрасывает дубликаты.
+Условие WHERE T1.column1 = 0 отбросит некоторое количество результатов из таблицы Т1.
+Одинаковый результат эти запросы могут дать только в том случае, если в таблице Т1 - нули.
+
+
+--4	Посчитайте количество треков в каждом альбоме. В результате должно быть:  имя альбома и кол-во треков.
+--	Решить  2-мя способами: подзапросом и джойнами 
+
+SELECT Title,
+       (
+           SELECT count( * ) 
+             FROM tracks
+            WHERE tracks.AlbumId = albums.AlbumId
+       )
+       AS count_tracks
+  FROM albums
+-- WHERE title = 'Restless and Wild';
+
+SELECT a.Title,
+       count( * ) count_tracks
+  FROM tracks AS t
+       INNER JOIN
+       albums AS a ON t.AlbumId = a.AlbumId
+       -- WHERE title = 'Restless and Wild'
+ GROUP BY a.Title;
+
+--5	Покажите фамилию и имя покупателей немцев сделавших заказы в 2009 году, товары которых были отгружены в город Берлин?
+
+SELECT ct.FirstName,
+       ct.LastName
+  FROM customers AS ct
+ WHERE ct.customerId IN (
+           SELECT s.customerId
+             FROM sales AS s
+            WHERE s.SalesDate >= date('2009-01-01') AND 
+                  s.SalesDate < date('2010-01-01') AND 
+                  ShipCity = 'Berlin'
+       )
+;
+SELECT DISTINCT ct.FirstName,
+                ct.LastName
+  FROM customers AS ct
+       INNER JOIN
+       sales AS s ON s.CustomerId = ct.CustomerId
+ WHERE s.SalesDate >= date('2009-01-01') AND 
+       s.SalesDate < date('2010-01-01') AND 
+       ShipCity = 'Berlin'
+;
+SELECT ct.FirstName,
+       ct.LastName
+  FROM customers AS ct
+       INNER JOIN
+       (
+           SELECT DISTINCT customerId
+             FROM sales AS s
+            WHERE s.SalesDate >= date('2009-01-01') AND 
+                  s.SalesDate < date('2010-01-01') AND 
+                  ShipCity = 'Berlin'
+       )
+       AS s ON s.customerId = ct.customerId
+;
+
+--6	Покажите фамилии  клиентов которые  купили больше 40 музыкальных треков ?
+--	Решить  задачу ,как минимум, 2-мя способами: джойнами и подзапросами
+
+SELECT LastName,
+       (
+           SELECT sum( (
+                           SELECT sum(Quantity) 
+                             FROM sales_items AS si
+                            WHERE si.SalesId = s.SalesId
+                       )
+                  ) 
+             FROM sales AS s
+            WHERE s.CustomerId = ct.CustomerId
+            GROUP BY CustomerId
+       )
+       AS count_sales
+  FROM customers AS ct
+ WHERE count_sales > 40
+ ORDER BY count_sales
+;
+SELECT ct.LastName,
+       sum(Quantity) AS count_sales
+  FROM customers AS ct
+       INNER JOIN
+       sales AS s ON s.CustomerId = ct.CustomerId
+       INNER JOIN
+       sales_items AS si ON si.SalesId = s.SalesId
+ GROUP BY ct.CustomerId,
+          LastName
+HAVING sum(Quantity) > 40
+ ORDER BY count_sales;
+
+
+
+
+--7	В базе есть таблица музыкальных треков и жанров Назовите среднюю стоимстость музыкального трека в каждом жанре?
+
+SELECT GenreId,
+       Name,
+       (
+           SELECT avg(UnitPrice) 
+             FROM tracks
+            WHERE tracks.GenreId = genres.GenreId
+       )
+       AS AveragePrice
+  FROM genres;
+
+--8	В базе есть таблица музыкальных треков и жанров. Покажите жанры у которых средняя стоимость одного трека больше 1-го рубля
+
+SELECT GenreId,
+       Name
+  FROM genres
+ WHERE (
+           SELECT avg(UnitPrice) 
+             FROM tracks
+            WHERE tracks.GenreId = genres.GenreId
+       ) > 1;
