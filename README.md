@@ -1,4 +1,4 @@
-# Наработки по SQLite
+# Наработки в SQLite
 
 Chinook's diagram
 
